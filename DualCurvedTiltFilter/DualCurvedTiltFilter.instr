@@ -1,0 +1,90 @@
+nebconfigbegin
+sr,48000
+ksmps,64
+-B,512
+-b,64
+nebconfigend
+
+
+/****************
+  DualCurvedTiltFilter.INSTR
+
+ * Overview of controls *
+ * Pitch - 
+ * Speed - 
+ * Start - Filter Cutoff
+ * Size - Filter Resonance
+ * Density - Filter Tilt
+ * Overlap - Amplifier
+ * Blend - Filter Response Curve
+ * Window - Distortion
+ * Record - 
+ * File - 
+ * Source - 
+ * Reset - 
+ * Freeze - 
+ ****************/
+
+
+instr 1
+
+ainl, ainr inch 1, 2
+
+if gksource == 1 then 
+	ainl = 0
+    ainr = 0
+endif
+
+; Control Mapping
+kFcControl = gkloopstart
+kResControl = gkloopsize
+kTilt = gkdensity
+kFilterCurve = gkblend
+kDistControl = gkwindow
+kAmpControl = gkoverlap
+
+; Filter Cutoff should be < sr / 2, which equals 24,000
+kFcMin = 20   ; Minimum cutoff frequency in Hz
+kFcMax = 20000 ; Maximum cutoff frequency in Hz
+kFcRange = kFcMax - kFcMin  ; Range of cutoff frequencies
+
+kPowMin = 0.5
+kPowMax = 2
+kPowRange = kPowMax - kPowMin
+kPowNorm = kFilterCurve * kPowRange
+kPow = kPowNorm + kPowMin
+
+kFcMapLPre = (kFcControl ^ kPow) * (kTilt + 0.5)
+kFcMapRPre = (kFcControl ^ kPow) * ((1 - kTilt) + 0.5)
+
+kFcMapL = (kFcMapLPre < 1 ? kFcMapLPre : 1)
+kFcMapR = (kFcMapRPre < 1 ? kFcMapRPre : 1)
+
+
+kFcNormL = kFcMapL * kFcRange  ; Normalized cutoff frequency
+kFcNormR = kFcMapR * kFcRange  ; Normalized cutoff frequency
+
+kFcL = kFcMin + kFcNormL   ; Cutoff frequency in Hz
+kFcR = kFcMin + kFcNormR   ; Cutoff frequency in Hz
+
+; Resonance
+kres = kResControl * 1.00
+
+; Distortion
+kdist = kDistControl * 1.00
+
+; Filter
+afilL lpf18 ainl, kFcL, kres, kdist
+afilR lpf18 ainr, kFcR, kres, kdist
+
+; VCA
+aAmp interp kAmpControl
+aGainL = afilL * aAmp
+aGainR = afilR * aAmp
+
+; Output
+aclippedl clip aGainL, 2, 0.92
+aclippedr clip aGainR, 2, 0.92
+outs aclippedl, aclippedr
+
+endin
